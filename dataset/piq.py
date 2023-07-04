@@ -12,11 +12,11 @@ from pytorch_lightning import LightningDataModule
 from prefetch_generator import BackgroundGenerator
 
 ROOT = 'PIQ2023'
-IMAGE_DIR = 'PIQ2023/Images'
+IMAGE_DIR = ROOT + '/Images'
 SPLIT_METHODS = ['Device', 'Scene']
 HEADS = ['Details', 'Exposure', 'Overall']
 
-CSV_PATH = 'PIQ2023/Test split/{} Split/{}Split_{}_Scores_{}.csv'
+CSV_PATH = ROOT + '/Test split/{} Split/{}Split_{}_Scores_{}.csv'
 
 class DataLoaderX(DataLoader):
     def __iter__(self):
