@@ -39,8 +39,11 @@ class PIQDataset(Dataset):
         if self.transform:
             image = self.transform(image)
             
+        quality_score = item['JOD']
+            
         sample = {
             'image': image,
+            'score': quality_score,
         }
             
         return sample

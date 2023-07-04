@@ -1,0 +1,20 @@
+name: resnet50_finetune_linear
+model:
+  target: model.model.PIQModel
+  params:
+    classifier: mlp
+    freeze_backbone: false
+  backbone:
+    target: model.backbone.ResNet50
+
+loggers:
+  tensorboard:
+    target: pytorch_lightning.loggers.TensorBoardLogger
+    params:
+      save_dir: logs
+      name: ${name}
+  wandb:
+    target: pytorch_lightning.loggers.WandbLogger
+    params:
+      name: ${name}
+      project: piq
