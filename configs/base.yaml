@@ -1,7 +1,7 @@
 model:
   target: model.model.PIQModel
   params:
-    lr: 1e-5
+    lr: 1e-4
 
 data:
   target: dataset.piq.PIQDataModule
@@ -44,5 +44,5 @@ trainer:
   params:
     accelerator: gpu
     devices: 1
-    precision: 16
+    precision: 16-mixed
     max_epochs: 50
