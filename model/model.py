@@ -1,35 +1,23 @@
 import torch
 from torch import nn
 from pytorch_lightning import LightningModule
-from torchmetrics import Accuracy
+from timm.loss import LabelSmoothingCrossEntropy
 
-def build_head(n_features, type='linear', hidden_size=512, num_layers=1):
-    # build head for regression task
-    assert type in ['linear', 'mlp']
-    if type == 'linear':
-        head = nn.Linear(n_features, 1)
-    elif type == 'mlp':
-        head = []
-        for i in range(num_layers):
-            if i == 0:
-                head.append(nn.Linear(n_features, hidden_size))
-                head.append(nn.ReLU())
-            else:
-                head.append(nn.Linear(hidden_size, hidden_size))
-                head.append(nn.ReLU())
-                
-        head.append(nn.Linear(hidden_size, 1))
-        head = nn.Sequential(*head)
-    # elif type == 'transformer':
-    #     pass
-    else:
-        raise NotImplementedError
-    
-    return head
+class Mlp(nn.Module):
+    def __init__(self, n_features, hidden_size=512, output_size=1):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(n_features, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size),
+        )
+        
+    def forward(self, x):
+        return self.layers(x)
+        
 
-class PIQModel(LightningModule):
-    def __init__(self, backbone, freeze_backbone=True, lr=1e-4, head='linear'):
-        assert head in ['linear', 'mlp']
+class PIQBaseModel(LightningModule):
+    def __init__(self, backbone, freeze_backbone=True, lr=1e-4, label_smoothing=0.1, alpha=0.5):
         super().__init__()
 
         self.backbone = backbone
@@ -38,37 +26,52 @@ class PIQModel(LightningModule):
             for param in self.backbone.parameters():
                 param.requires_grad = False
                 
-
-        self.head = build_head(n_features=self.backbone.n_features, type=head)
+        # Quality head - regression
+        self.quality_head = Mlp(self.backbone.n_features, output_size=1)
+        # Scene head - classification
+        self.scene_head = nn.Sequential(
+            Mlp(self.backbone.n_features, output_size=4),
+            nn.Softmax(dim=1)
+        )
+        
+        self.quality_loss = nn.L1Loss()
+        if label_smoothing > 0:
+            self.scene_loss = LabelSmoothingCrossEntropy(smoothing=label_smoothing)
+        else:
+            self.scene_loss = nn.CrossEntropyLoss()
 
         self.lr = lr
-        self.loss = self.get_loss()
+        self.alpha = alpha
 
-    def forward(self, x):
-        x = self.backbone(x)
-        x = self.head(x)
-        return x
-    
-    def get_loss(self):
-        return nn.L1Loss()
+    def forward(self, batch):
+        x = batch['image']
+        target_quality = batch['quality_score'].unsqueeze(1)
+        target_scene = batch['scene_label']
+        
+        x = self.backbone(x, return_features_only=True)
+        quality = self.quality_head(x)
+        scene = self.scene_head(x)
+        
+        quality_loss = self.quality_loss(quality, target_quality)
+        scene_loss = self.scene_loss(scene, target_scene)
+        total_loss = self.alpha * quality_loss + (1 - self.alpha) * scene_loss
+        return total_loss, quality_loss, scene_loss
     
     def training_step(self, batch, batch_idx):
-        x = batch['image']
-        y = batch['score'].unsqueeze(1)
-        y_hat = self.forward(x)
-        loss = self.loss(y_hat, y)
+        loss, quality_loss, scene_loss = self.forward(batch)
         self.log('train_loss', loss)
+        self.log('train_quality_loss', quality_loss)
+        self.log('train_scene_loss', scene_loss)
         return loss
     
     def validation_step(self, batch, batch_idx):
-        x = batch['image']
-        y = batch['score'].unsqueeze(1)
-        y_hat = self.forward(x)
-        loss = self.loss(y_hat, y)
-        self.log('val_loss', loss)
+        loss, quality_loss, scene_loss = self.forward(batch)
+        self.log('train_loss', loss)
+        self.log('train_quality_loss', quality_loss)
+        self.log('train_scene_loss', scene_loss)
         return loss
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         return [optimizer], [scheduler]

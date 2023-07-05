@@ -1,8 +1,7 @@
 name: resnet18_finetune_linear
 model:
-  target: model.model.PIQModel
+  target: model.model.PIQBaseModel
   params:
-    head: mlp
     freeze_backbone: false
   backbone:
     target: model.backbone.ResNet18
@@ -17,4 +16,5 @@ loggers:
     target: pytorch_lightning.loggers.WandbLogger
     params:
       name: ${name}
+      group: resnet18
       project: piq

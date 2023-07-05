@@ -1,8 +1,7 @@
 name: resnet50_finetune_linear
 model:
-  target: model.model.PIQModel
+  target: model.model.PIQBaseModel
   params:
-    classifier: mlp
     freeze_backbone: false
   backbone:
     target: model.backbone.ResNet50

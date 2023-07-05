@@ -30,6 +30,8 @@ class PIQDataset(Dataset):
         csv_path = CSV_PATH.format(split_method, split_method, split, head)
         self.data = pd.read_csv(csv_path)
         
+        self.scene_to_idx = {scene: idx for idx, scene in enumerate(self.data['CONDITION'].unique())}
+        
     def __len__(self):
         return len(self.data)
     
@@ -40,10 +42,12 @@ class PIQDataset(Dataset):
             image = self.transform(image)
             
         quality_score = item['JOD']
+        scene = self.scene_to_idx[item['CONDITION']]
             
         sample = {
             'image': image,
-            'score': quality_score,
+            'quality_score': quality_score,
+            'scene_label': scene,
         }
             
         return sample
@@ -65,8 +69,8 @@ class PIQDataModule(LightningDataModule):
                 transforms.Resize((size, size)),
                 transforms.CenterCrop(size),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                                        std=[0.5, 0.5, 0.5]),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225]),
             ])
         else:
             self.transform = transform
