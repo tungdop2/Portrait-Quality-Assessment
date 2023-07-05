@@ -66,9 +66,9 @@ class PIQBaseModel(LightningModule):
     
     def validation_step(self, batch, batch_idx):
         loss, quality_loss, scene_loss = self.forward(batch)
-        self.log('train_loss', loss)
-        self.log('train_quality_loss', quality_loss)
-        self.log('train_scene_loss', scene_loss)
+        self.log('val_loss', loss)
+        self.log('val_quality_loss', quality_loss)
+        self.log('val_scene_loss', scene_loss)
         return loss
     
     def configure_optimizers(self):

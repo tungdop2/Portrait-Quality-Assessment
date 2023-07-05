@@ -16,4 +16,5 @@ loggers:
     target: pytorch_lightning.loggers.WandbLogger
     params:
       name: ${name}
+      group: resnet50
       project: piq
