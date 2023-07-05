@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from pytorch_lightning import LightningModule
 from timm.loss import LabelSmoothingCrossEntropy
+from torchmetrics import Accuracy
 
 class Mlp(nn.Module):
     def __init__(self, n_features, hidden_size=512, output_size=1):
@@ -39,6 +40,8 @@ class PIQBaseModel(LightningModule):
             self.scene_loss = LabelSmoothingCrossEntropy(smoothing=label_smoothing)
         else:
             self.scene_loss = nn.CrossEntropyLoss()
+        self.train_acc = Accuracy(task='multiclass', num_classes=4)
+        self.val_acc = Accuracy(task='multiclass', num_classes=4)
 
         self.lr = lr
         self.alpha = alpha
@@ -55,6 +58,12 @@ class PIQBaseModel(LightningModule):
         quality_loss = self.quality_loss(quality, target_quality)
         scene_loss = self.scene_loss(scene, target_scene)
         total_loss = self.alpha * quality_loss + (1 - self.alpha) * scene_loss
+        
+        if self.training:
+            self.train_acc(scene, target_scene)
+        else:
+            self.val_acc(scene, target_scene)
+            
         return total_loss, quality_loss, scene_loss
     
     def training_step(self, batch, batch_idx):
@@ -62,6 +71,7 @@ class PIQBaseModel(LightningModule):
         self.log('train_loss', loss)
         self.log('train_quality_loss', quality_loss)
         self.log('train_scene_loss', scene_loss)
+        self.log('train_acc', self.train_acc, on_step=False, on_epoch=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -69,6 +79,7 @@ class PIQBaseModel(LightningModule):
         self.log('val_loss', loss)
         self.log('val_quality_loss', quality_loss)
         self.log('val_scene_loss', scene_loss)
+        self.log('val_acc', self.val_acc, on_step=False, on_epoch=True)
         return loss
     
     def configure_optimizers(self):
