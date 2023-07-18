@@ -15,11 +15,11 @@ loggers:
     params:
       save_dir: logs
       name: piq
-  wandb:
-    target: pytorch_lightning.loggers.WandbLogger
-    params:
-      name: pq
-      project: piq
+  # wandb:
+  #   target: pytorch_lightning.loggers.WandbLogger
+  #   params:
+  #     name: piq
+  #     project: piq
 
 callbacks:
   model_checkpoint:

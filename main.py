@@ -23,7 +23,7 @@ def get_parser(**parser_kwargs):
             raise argparse.ArgumentTypeError("Boolean value expected.")
 
     parser = argparse.ArgumentParser(**parser_kwargs)
-    parser.add_argument("--config", type=str, required=True)
+    parser.add_argument("--config", type=str, default='configs/resnet/resnet50.yaml')
 
     return parser
 
