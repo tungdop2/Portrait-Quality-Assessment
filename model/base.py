@@ -90,17 +90,26 @@ class BasePIQModel(LightningModule):
         self.log('train_loss', loss)
         self.log('train_quality_loss', quality_loss)
         self.log('train_scene_loss', scene_loss)
-        self.log('train_acc', self.train_acc, on_step=False, on_epoch=True)
-        self.log('train_corr', self.train_corr, on_step=False, on_epoch=True)
         return loss
+    
+    def on_train_epoch_end(self):
+        self.log('train_acc', self.train_acc.compute())
+        self.log('train_corr', self.train_corr.compute())
+        self.train_acc.reset()
+        self.train_corr.reset()
     
     def validation_step(self, batch, batch_idx):
         loss, quality_loss, scene_loss = self.forward(batch)
         self.log('val_loss', loss)
         self.log('val_quality_loss', quality_loss)
         self.log('val_scene_loss', scene_loss)
-        self.log('val_acc', self.val_acc, on_step=False, on_epoch=True)
         return loss
+    
+    def on_validation_epoch_end(self):
+        self.log('val_acc', self.val_acc.compute())
+        self.log('val_corr', self.val_corr.compute())
+        self.val_acc.reset()
+        self.val_corr.reset()
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
