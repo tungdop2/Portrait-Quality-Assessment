@@ -2,6 +2,7 @@ name: hyperpiq_resnet50
 model:
   target: model.base.HyperPIQModel
   params:
+    lr: 1e-5
     freeze_backbone: false
   backbone:
     target: model.backbone.resnet50_backbone
