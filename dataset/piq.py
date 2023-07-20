@@ -54,7 +54,7 @@ class PIQDataset(Dataset):
 
 
 class PIQDataModule(LightningDataModule):
-    def __init__(self, size=512, batch_size: int = 4, num_workers: int = 2, transform=None,
+    def __init__(self, size=224, batch_size: int = 4, num_workers: int = 2, transform=None,
             split_method='Device', head='Details', **kwargs):
         
         assert split_method in SPLIT_METHODS

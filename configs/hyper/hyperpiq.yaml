@@ -1,0 +1,23 @@
+name: hyperpiq_resnet50_finetune_linear
+model:
+  target: model.base.HyperPIQModel
+  params:
+    freeze_backbone: false
+  backbone:
+    target: model.backbone.resnet50_backbone
+    params:
+      pretrained: true
+      hyper: true
+
+loggers:
+  tensorboard:
+    target: pytorch_lightning.loggers.TensorBoardLogger
+    params:
+      save_dir: logs
+      name: ${name}
+  # wandb:
+  #   target: pytorch_lightning.loggers.WandbLogger
+  #   params:
+  #     name: ${name}
+  #     group: resnet50
+  #     project: piq

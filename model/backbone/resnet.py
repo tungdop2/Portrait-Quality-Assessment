@@ -13,6 +13,43 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
+
+class Mlp(nn.Module):
+    def __init__(self, n_features, hidden_size=512, output_size=1):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(n_features, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, output_size),
+        )
+        
+    def forward(self, x):
+        return self.layers(x)
+    
+
+class LDA(nn.Module):
+    def __init__(self, in_chn, middle_chn, out_chn, conv=True):
+        super(LDA, self).__init__()
+        self.in_chn = in_chn
+        self.middle_chn = middle_chn
+        self.out_chn = out_chn
+        self.conv = conv
+        
+        if conv:
+            self.conv = nn.Conv2d(in_chn, middle_chn, kernel_size=1, stride=1, padding=0, bias=False)
+            self.pool = nn.AdaptiveAvgPool2d((1, 1))
+            self.fc = nn.Linear(middle_chn, out_chn)
+        else:
+            self.pool = nn.AdaptiveAvgPool2d((1, 1))
+            self.fc = nn.Linear(in_chn, out_chn)
+        
+    def forward(self, x):
+        if self.conv:
+            x = self.conv(x)
+        x = self.pool(x)
+        return self.fc(x.view(x.size(0), -1))
+    
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -54,11 +91,11 @@ class Bottleneck(nn.Module):
 
 class ResNetBackbone(nn.Module):
 
-    def __init__(self, block, layers):
+    def __init__(self, block, layers, hyper=False):
         super(ResNetBackbone, self).__init__()
         
         self.inplanes = 64
-        self.n_features = 2048
+        self.hyper = hyper
         
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -68,29 +105,22 @@ class ResNetBackbone(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-
-        # local distortion aware module
-        self.lda1_pool = nn.Sequential(
-            nn.Conv2d(256, 16, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.AdaptiveAvgPool2d((1, 1)),
-        )
-        self.lda1_fc = nn.Linear(16, self.n_features // 4)
-
-        self.lda2_pool = nn.Sequential(
-            nn.Conv2d(512, 32, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.AdaptiveAvgPool2d((1, 1)),
-        )
-        self.lda2_fc = nn.Linear(32, self.n_features // 4)
-
-        self.lda3_pool = nn.Sequential(
-            nn.Conv2d(1024, 64, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.AdaptiveAvgPool2d((1, 1)),
-        )
-        self.lda3_fc = nn.Linear(64, self.n_features // 4)
-
-        self.lda4_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.lda4_fc = nn.Linear(2048, self.n_features // 4)
+        
+        if not self.hyper:
+            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+            self.scene_head = nn.Sequential(
+                Mlp(256, hidden_size=512, output_size=4),
+                nn.Softmax(dim=1),
+            )
+            self.quality_head = Mlp(256, hidden_size=512, output_size=1)
+        else:
+            self.n_features = 224
+            self.semantic_dim = 2048
+            # local distortion aware module
+            self.lda1 = LDA(256, 16, self.n_features // 4, conv=True)
+            self.lda2 = LDA(512, 32, self.n_features // 4, conv=True)
+            self.lda3 = LDA(1024, 64, self.n_features // 4, conv=True)
+            self.lda4 = LDA(2048, 2048, self.n_features // 4, conv=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -99,15 +129,7 @@ class ResNetBackbone(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-
-        # initialize
-        nn.init.kaiming_normal_(self.lda1_pool._modules['0'].weight.data)
-        nn.init.kaiming_normal_(self.lda2_pool._modules['0'].weight.data)
-        nn.init.kaiming_normal_(self.lda3_pool._modules['0'].weight.data)
-        nn.init.kaiming_normal_(self.lda1_fc.weight.data)
-        nn.init.kaiming_normal_(self.lda2_fc.weight.data)
-        nn.init.kaiming_normal_(self.lda3_fc.weight.data)
-        nn.init.kaiming_normal_(self.lda4_fc.weight.data)
+                
 
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
@@ -126,7 +148,7 @@ class ResNetBackbone(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, return_multiscale=False):
+    def forward(self, x):
         out = {}
         
         x = self.conv1(x)
@@ -135,23 +157,22 @@ class ResNetBackbone(nn.Module):
         x = self.maxpool(x)
         x = self.layer1(x)
         
-        # the same effect as lda operation in the paper, but save much more memory
-        lda_1 = self.lda1_fc(self.lda1_pool(x).view(x.size(0), -1))
-        x = self.layer2(x)
-        lda_2 = self.lda2_fc(self.lda2_pool(x).view(x.size(0), -1))
-        x = self.layer3(x)
-        lda_3 = self.lda3_fc(self.lda3_pool(x).view(x.size(0), -1))
-        x = self.layer4(x)
-        
-        if return_multiscale:
-            lda_4 = self.lda4_fc(self.lda4_pool(x).view(x.size(0), -1))
+        if not self.hyper:
+            feat = self.avgpool(x).view(x.size(0), -1)
+            out['quality'] = self.quality_head(feat)
+            out['scene'] = self.scene_head(feat)
+        else:
+            lda_1 = self.lda1(x)
+            x = self.layer2(x)
+            lda_2 = self.lda2(x)
+            x = self.layer3(x)
+            lda_3 = self.lda3(x)
+            x = self.layer4(x)
+            lda_4 = self.lda4(x)
+            
             vec = torch.cat((lda_1, lda_2, lda_3, lda_4), 1)
             out['multiscale_feat'] = vec
             out['semantic_feat'] = x
-        else:
-            feat = self.avgpool(x).view(x.size(0), -1)
-            out['multiscale_feat'] = feat
-            out['semantic_feat'] = feat
 
         return out
 
@@ -189,9 +210,9 @@ def weights_init_xavier(m):
         init.constant_(m.bias.data, 0.0)
         
 if __name__ == '__main__':
-    model = resnet50_backbone()
+    model = resnet50_backbone(hyper=True)
     # print(model)
-    x = torch.randn(1, 3, 448, 448)
-    out = model(x, return_multiscale=False)
+    x = torch.randn(1, 3, 224, 224)
+    out = model(x)
     print(out['multiscale_feat'].shape)
     print(out['semantic_feat'].shape)
