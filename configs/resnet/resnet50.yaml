@@ -1,4 +1,4 @@
-name: resnet50_finetune_linear
+name: resnet50
 model:
   target: model.base.BasePIQModel
   params:
@@ -18,5 +18,5 @@ loggers:
     target: pytorch_lightning.loggers.WandbLogger
     params:
       name: ${name}
-      group: resnet50
+      group: resnet
       project: piq

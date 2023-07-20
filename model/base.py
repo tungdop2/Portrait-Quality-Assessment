@@ -169,30 +169,35 @@ class HyperPIQModel(BasePIQModel):
         w1 = w1.view(-1, n_features // 2, n_features, 1, 1)
         b1 = self.fc1b(out_flat)
         target_net1 = TargetFC(w1, b1)
+        target_net1.requires_grad_(False)
         
         n_features = n_features // 2
         w2 = self.fc2w(out_flat)
         w2 = w2.view(-1, n_features // 2, n_features, 1, 1)
         b2 = self.fc2b(out_flat)
         target_net2 = TargetFC(w2, b2)
+        target_net2.requires_grad_(False)
         
         n_features = n_features // 2
         w3 = self.fc3w(out_flat)
         w3 = w3.view(-1, n_features // 2, n_features, 1, 1)
         b3 = self.fc3b(out_flat)
         target_net3 = TargetFC(w3, b3)
+        target_net3.requires_grad_(False)
         
         n_features = n_features // 2
         w4 = self.fc4w(out_flat)
         w4 = w4.view(-1, n_features // 2, n_features, 1, 1)
         b4 = self.fc4b(out_flat)
         target_net4 = TargetFC(w4, b4)
+        target_net4.requires_grad_(False)
         
         n_features = n_features // 2
         w5 = self.fc5w(out_flat)
         w5 = w5.view(-1, 1, n_features, 1, 1)
         b5 = self.fc5b(out_flat)
         target_net5 = TargetFC(w5, b5)
+        target_net5.requires_grad_(False)
         
         multiscale_feat = multiscale_feat.view(multiscale_feat.shape[0], multiscale_feat.shape[1], 1, 1)
         out = target_net1(multiscale_feat)
