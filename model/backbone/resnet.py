@@ -117,10 +117,10 @@ class ResNetBackbone(nn.Module):
             self.n_features = 224
             self.semantic_dim = 2048
             # local distortion aware module
-            self.lda1 = LDA(256, 16, self.n_features // 4, conv=True)
-            self.lda2 = LDA(512, 32, self.n_features // 4, conv=True)
-            self.lda3 = LDA(1024, 64, self.n_features // 4, conv=True)
-            self.lda4 = LDA(2048, 2048, self.n_features // 4, conv=False)
+            self.lda1 = LDA(256, 16, 16, conv=True)
+            self.lda2 = LDA(512, 32, 32, conv=True)
+            self.lda3 = LDA(1024, 64, 64, conv=True)
+            self.lda4 = LDA(2048, 2048, self.n_features - 16 - 32 - 64, conv=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
